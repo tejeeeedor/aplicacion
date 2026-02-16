@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Habit Master - Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root { --bg: #0f172a; --card: #1e293b; --accent: #10b981; --text: #f8fafc; --gray: #94a3b8; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; width: 100%; max-width: 900px; }
+        .card { background: var(--card); padding: 20px; border-radius: 16px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); }
+        .full-width { grid-column: 1 / -1; }
+        h2 { margin-top: 0; font-size: 1.2rem; color: var(--accent); }
+        .habit-row { display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #334155; }
+        button { background: var(--accent); border: none; color: white; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.3s; }
+        button:hover { opacity: 0.8; transform: scale(1.05); }
+        .recommendation-box { border-left: 5px solid var(--accent); background: #134e4a; padding: 15px; border-radius: 8px; margin-bottom: 20px; width: 100%; max-width: 860px; }
+        input { background: #334155; border: none; padding: 10px; border-radius: 8px; color: white; width: 60%; }
+    </style>
+</head>
+<body>
+
+    <div class="recommendation-box">
+        <strong>💡 Recomendación del Sistema:</strong>
+        <p id="ai-rec">Analizando tus patrones... ¡Sigue así, vas por buen camino!</p>
+    </div>
+
+    <div class="grid">
+        <div class="card">
+            <h2>Progreso Diario</h2>
+            <canvas id="progressChart"></canvas>
+        </div>
+
+        <div class="card">
+            <h2>Mis Hábitos</h2>
+            <div id="habit-list"></div>
+            <div style="margin-top: 15px; display: flex; gap: 10px;">
+                <input type="text" id="habit-input" placeholder="Nuevo hábito...">
+                <button onclick="addHabit()">+</button>
+            </div>
+        </div>
+
+        <div class="card full-width">
+            <h2>Actividad de la Semana</h2>
+            <canvas id="weeklyChart" height="80"></canvas>
+        </div>
+    </div>
+
+    <script>
+        // 1. TUS DATOS (Ya están configurados)
+        const SUPABASE_URL = 'https://nuxnnzrbfrufkjnpgrmp.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im51eG5uenJiZnJ1ZmtqbnBncm1wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEyMzk2ODAsImV4cCI6MjA4NjgxNTY4MH0.5wf0J-i0t_pRbRxHchib-9bTVTUJ5L1ag2PIe43dzZ0'; 
+    
+        let habits = JSON.parse(localStorage.getItem('habits')) || [
+            { name: 'Beber Agua', completed: false, streak: 5 },
+            { name: 'Leer 10 min', completed: false, streak: 2 }
+        ];
+    
+        let progressChart, weeklyChart;
+    
+        function initCharts() {
+            const ctx1 = document.getElementById('progressChart').getContext('2d');
+            progressChart = new Chart(ctx1, {
+                type: 'doughnut',
+                data: { labels: ['Completado', 'Pendiente'], datasets: [{ data: [0, 100], backgroundColor: ['#10b981', '#334155'], borderWidth: 0 }] },
+                options: { cutout: '80%' }
+            });
+    
+            const ctx2 = document.getElementById('weeklyChart').getContext('2d');
+            weeklyChart = new Chart(ctx2, {
+                type: 'bar',
+                data: { labels: ['Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab', 'Dom'], datasets: [{ label: 'Hábitos Logrados', data: [3, 5, 2, 4, 0, 0, 0], backgroundColor: '#38bdf8' }] }
+            });
+        }
+    
+        function render() {
+            const list = document.getElementById('habit-list');
+            list.innerHTML = '';
+            let completedCount = 0;
+    
+            habits.forEach((h, i) => {
+                if(h.completed) completedCount++;
+                list.innerHTML += `
+                    <div class="habit-row">
+                        <span>${h.name} <b>(🔥 ${h.streak})</b></span>
+                        <button onclick="handleToggle(${i})" style="background: ${h.completed ? '#334155' : '#10b981'}">
+                            ${h.completed ? 'Deshacer' : 'Logrado'}
+                        </button>
+                    </div>
+                `;
+            });
+    
+            const percent = (completedCount / habits.length) * 100 || 0;
+            if(progressChart) {
+                progressChart.data.datasets[0].data = [percent, 100 - percent];
+                progressChart.update();
+            }
+            updateAI(percent);
+            localStorage.setItem('habits', JSON.stringify(habits));
+        }
+    
+        // --- LA CONEXIÓN REAL ---
+        const scriptSupabase = document.createElement('script');
+        scriptSupabase.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js';
+        document.head.append(scriptSupabase);
+    
+        let supabaseClient;
+        scriptSupabase.onload = () => {
+            supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+            console.log("✅ CONECTADO A SUPABASE, SEÑOR RAÚL");
+        };
+    
+        async function handleToggle(index) {
+            // Actualizar localmente primero
+            habits[index].completed = !habits[index].completed;
+            if(habits[index].completed) habits[index].streak++;
+            else habits[index].streak--;
+            render();
+    
+            // Enviar a la nube
+            if (supabaseClient) {
+                console.log("Subiendo a la nube: ", habits[index].name);
+                const { error } = await supabaseClient
+                    .from('habitos')
+                    .upsert({ 
+                        nombre: habits[index].name, 
+                        racha: habits[index].streak, 
+                        completado_hoy: habits[index].completed 
+                    }, { onConflict: 'nombre' });
+    
+                if (error) console.error("❌ ERROR SUPABASE:", error.message);
+                else console.log("🚀 GUARDADO EN SUPABASE!");
+            }
+        }
+    
+        function addHabit() {
+            const val = document.getElementById('habit-input').value;
+            if(val) {
+                habits.push({ name: val, completed: false, streak: 0 });
+                document.getElementById('habit-input').value = '';
+                render();
+            }
+        }
+    
+        function updateAI(percent) {
+            const rec = document.getElementById('ai-rec');
+            if (percent === 0) rec.innerText = "¡Empieza el día con un hábito pequeño! ¿Qué tal beber un vaso de agua?";
+            else if (percent < 50) rec.innerText = "Vas por buen camino. Intenta completar uno más antes de la comida.";
+            else if (percent === 100) rec.innerText = "¡Día perfecto! Señor, su disciplina es impecable hoy.";
+        }
+    
+        window.onload = () => {
+            initCharts();
+            render();
+        };
+    </script>
+</body>
+</html>
