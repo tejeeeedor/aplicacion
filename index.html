@@ -48,17 +48,14 @@
     </div>
 
     <script>
-        // 1. TUS DATOS (Ya están configurados)
+        // 1. CONFIGURACIÓN (URL corregida letra por letra)
         const SUPABASE_URL = 'https://nuxnnzrbfrufkjnpgrmp.supabase.co';
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im51eG5uenJiZnJ1ZmtqbnBncm1wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEyMzk2ODAsImV4cCI6MjA4NjgxNTY4MH0.5wf0J-i0t_pRbRxHchib-9bTVTUJ5L1ag2PIe43dzZ0'; 
     
-        let habits = JSON.parse(localStorage.getItem('habits')) || [
-            { name: 'Beber Agua', completed: false, streak: 5 },
-            { name: 'Leer 10 min', completed: false, streak: 2 }
-        ];
-    
+        let habits = [];
         let progressChart, weeklyChart;
     
+        // 2. INICIALIZAR GRÁFICAS
         function initCharts() {
             const ctx1 = document.getElementById('progressChart').getContext('2d');
             progressChart = new Chart(ctx1, {
@@ -70,10 +67,14 @@
             const ctx2 = document.getElementById('weeklyChart').getContext('2d');
             weeklyChart = new Chart(ctx2, {
                 type: 'bar',
-                data: { labels: ['Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab', 'Dom'], datasets: [{ label: 'Hábitos Logrados', data: [3, 5, 2, 4, 0, 0, 0], backgroundColor: '#38bdf8' }] }
+                data: { 
+                    labels: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'], 
+                    datasets: [{ label: 'Racha Actual', data: [0, 0, 0, 0, 0, 0, 0], backgroundColor: '#38bdf8' }] 
+                }
             });
         }
     
+        // 3. DIBUJAR EN PANTALLA
         function render() {
             const list = document.getElementById('habit-list');
             list.innerHTML = '';
@@ -84,9 +85,12 @@
                 list.innerHTML += `
                     <div class="habit-row">
                         <span>${h.name} <b>(🔥 ${h.streak})</b></span>
-                        <button onclick="handleToggle(${i})" style="background: ${h.completed ? '#334155' : '#10b981'}">
-                            ${h.completed ? 'Deshacer' : 'Logrado'}
-                        </button>
+                        <div style="display: flex; gap: 5px;">
+                            <button onclick="handleToggle(${i})" style="background: ${h.completed ? '#334155' : '#10b981'}">
+                                ${h.completed ? 'Deshacer' : 'Logrado'}
+                            </button>
+                            <button onclick="deleteHabit(${i})" style="background: #ef4444; padding: 8px 10px;">🗑️</button>
+                        </div>
                     </div>
                 `;
             });
@@ -96,85 +100,122 @@
                 progressChart.data.datasets[0].data = [percent, 100 - percent];
                 progressChart.update();
             }
+    
+            if(weeklyChart) {
+                const streaks = habits.slice(0, 7).map(h => h.streak);
+                const labels = habits.slice(0, 7).map(h => h.name);
+                weeklyChart.data.datasets[0].data = streaks;
+                weeklyChart.data.labels = labels.length > 0 ? labels : ['Sin datos'];
+                weeklyChart.update();
+            }
+    
             updateAI(percent);
-            localStorage.setItem('habits', JSON.stringify(habits));
         }
     
-        // --- LA CONEXIÓN REAL ---
+        // 4. CARGAR SUPABASE Y DATOS
         const scriptSupabase = document.createElement('script');
         scriptSupabase.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js';
         document.head.append(scriptSupabase);
     
         let supabaseClient;
-        scriptSupabase.onload = () => {
+        scriptSupabase.onload = async () => {
             supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
             console.log("✅ CONECTADO A SUPABASE, SEÑOR RAÚL");
+            
+            // Cargar datos justo después de conectar
+            const { data, error } = await supabaseClient.from('habitos').select('*').order('nombre');
+            if (!error && data) {
+                habits = data.map(h => ({ name: h.nombre, completed: h.completado_hoy, streak: h.racha }));
+                console.log("🚀 DATOS SINCRONIZADOS");
+                render();
+            }
         };
     
         async function handleToggle(index) {
-            // Actualizar localmente primero
             habits[index].completed = !habits[index].completed;
-            if(habits[index].completed) habits[index].streak++;
-            else habits[index].streak--;
+            habits[index].streak += habits[index].completed ? 1 : -1;
             render();
     
-            // Enviar a la nube
             if (supabaseClient) {
-                console.log("Subiendo a la nube: ", habits[index].name);
-                const { error } = await supabaseClient
-                    .from('habitos')
-                    .upsert({ 
-                        nombre: habits[index].name, 
-                        racha: habits[index].streak, 
-                        completado_hoy: habits[index].completed 
-                    }, { onConflict: 'nombre' });
-    
-                if (error) console.error("❌ ERROR SUPABASE:", error.message);
-                else console.log("🚀 GUARDADO EN SUPABASE!");
+                await supabaseClient.from('habitos').upsert({ 
+                    nombre: habits[index].name, 
+                    racha: habits[index].streak, 
+                    completado_hoy: habits[index].completed 
+                });
             }
         }
     
-        function addHabit() {
+        async function deleteHabit(index) {
+    const nombreBorrar = habits[index].name;
+    
+    // --- PLANTILLA DE CONFIRMACIÓN ESTILO SEÑOR RAÚL ---
+    const confirmacion = confirm(
+        "⚠️ ¡ALERTA DE DESTRUCCIÓN! ⚠️\n\n" +
+        "Señor Raúl, ¿está seguro de que desea aniquilar el hábito: '" + nombreBorrar + "'?\n\n" +
+        "Una vez borrado, desaparecerá de la base de datos para siempre."
+    );
+
+    if (confirmacion) {
+        // 1. Lo quitamos de la pantalla
+        habits.splice(index, 1);
+        render();
+
+        // 2. Lo borramos de la nube (Supabase)
+        if (supabaseClient) {
+            const { error } = await supabaseClient
+                .from('habitos')
+                .delete()
+                .eq('nombre', nombreBorrar);
+            
+            if (!error) {
+                console.log("💥 Hábito '" + nombreBorrar + "' eliminado con éxito.");
+            } else {
+                console.error("❌ Fallo al intentar borrar:", error.message);
+            }
+        }
+    } else {
+        console.log("🛡️ Sabia decisión, Señor Raúl. El hábito ha sido perdonado.");
+    }
+}
+    
+        async function addHabit() {
             const val = document.getElementById('habit-input').value;
             if(val) {
-                habits.push({ name: val, completed: false, streak: 0 });
+                const newHabit = { name: val, completed: false, streak: 0 };
+                habits.push(newHabit);
                 document.getElementById('habit-input').value = '';
                 render();
+                if (supabaseClient) {
+                    await supabaseClient.from('habitos').insert({ nombre: val, racha: 0, completado_hoy: false });
+                }
             }
         }
     
         function updateAI(percent) {
             const rec = document.getElementById('ai-rec');
-            if (percent === 0) rec.innerText = "¡Empieza el día con un hábito pequeño! ¿Qué tal beber un vaso de agua?";
-            else if (percent < 50) rec.innerText = "Vas por buen camino. Intenta completar uno más antes de la comida.";
-            else if (percent === 100) rec.innerText = "¡Día perfecto! Señor, su disciplina es impecable hoy.";
+            rec.innerText = percent === 100 ? "¡Día perfecto, Señor Raúl!" : "Analizando patrones...";
         }
     
-        window.onload = async () => {
-    initCharts();
-    
-    // Si tenemos conexión, traemos los datos de la nube
-    if (supabaseClient) {
-        console.log("Cargando tus hábitos desde la nube...");
-        const { data, error } = await supabaseClient
-            .from('habitos')
-            .select('*')
-            .order('nombre', { ascending: true });
-
-        if (error) {
-            console.error("Error al cargar:", error.message);
-        } else if (data && data.length > 0) {
-            // Transformamos los datos de Supabase al formato de tu app
-            habits = data.map(h => ({
-                name: h.nombre,
-                completed: h.completado_hoy,
-                streak: h.racha
-            }));
-            console.log("Datos sincronizados con éxito.");
-        }
-    }
-    render();
-};
+        window.onload = () => {
+            initCharts();
+        };
     </script>
 </body>
+
+<div id="delete-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 1000; align-items: center; justify-content: center; backdrop-filter: blur(5px);">
+    <div style="background: #1e293b; padding: 30px; border-radius: 20px; border: 2px solid #ef4444; max-width: 400px; text-align: center; box-shadow: 0 0 20px rgba(239, 68, 68, 0.4); transform: scale(0.9); transition: 0.3s; animation: modalPop 0.3s forwards;">
+        <h2 style="color: #ef4444; margin-top: 0;">⚠️ ALERTA DE DESTRUCCIÓN</h2>
+        <p id="modal-text" style="font-size: 1.1rem; line-height: 1.5;">¿Seguro que desea aniquilar este hábito, Señor Raúl?</p>
+        <div style="display: flex; gap: 10px; justify-content: center; margin-top: 25px;">
+            <button onclick="closeModal()" style="background: #475569;">PERDONAR</button>
+            <button id="confirm-delete-btn" style="background: #ef4444; box-shadow: 0 0 10px rgba(239, 68, 68, 0.5);">ANIQUILAR</button>
+        </div>
+    </div>
+</div>
+
+<style>
+    @keyframes modalPop {
+        to { transform: scale(1); }
+    }
+</style>
 </html>
