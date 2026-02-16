@@ -150,10 +150,31 @@
             else if (percent === 100) rec.innerText = "¡Día perfecto! Señor, su disciplina es impecable hoy.";
         }
     
-        window.onload = () => {
-            initCharts();
-            render();
-        };
+        window.onload = async () => {
+    initCharts();
+    
+    // Si tenemos conexión, traemos los datos de la nube
+    if (supabaseClient) {
+        console.log("Cargando tus hábitos desde la nube...");
+        const { data, error } = await supabaseClient
+            .from('habitos')
+            .select('*')
+            .order('nombre', { ascending: true });
+
+        if (error) {
+            console.error("Error al cargar:", error.message);
+        } else if (data && data.length > 0) {
+            // Transformamos los datos de Supabase al formato de tu app
+            habits = data.map(h => ({
+                name: h.nombre,
+                completed: h.completado_hoy,
+                streak: h.racha
+            }));
+            console.log("Datos sincronizados con éxito.");
+        }
+    }
+    render();
+};
     </script>
 </body>
 </html>
