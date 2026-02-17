@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Calendario de Poder - Señor Raúl</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+    
+    <style>
+        :root { --bg: #0f172a; --card: #1e293b; --accent: #10b981; --text: #f8fafc; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        .calendar-card { background: var(--card); padding: 25px; border-radius: 24px; width: 100%; max-width: 400px; box-shadow: 0 20px 25px rgba(0,0,0,0.3); }
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; }
+        .day { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.05); border-radius: 12px; font-weight: 600; color: #94a3b8; }
+        .day.completed { background: var(--accent); color: white; box-shadow: 0 0 15px rgba(16, 185, 129, 0.4); }
+        .day-name { text-align: center; font-size: 0.75rem; color: var(--accent); font-weight: bold; padding-bottom: 10px; }
+        .btn-volver { background: #334155; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; margin-bottom: 20px; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <a href="index.html" class="btn-volver">← Volver al Panel</a>
+
+    <div class="calendar-card">
+        <h2 style="text-align: center;">Febrero 2026</h2>
+        <div class="calendar-grid">
+            <div class="day-name">L</div><div class="day-name">M</div><div class="day-name">X</div>
+            <div class="day-name">J</div><div class="day-name">V</div><div class="day-name">S</div>
+            <div class="day-name">D</div>
+        </div>
+        <div id="calendar-days" class="calendar-grid"></div>
+    </div>
+
+    <script>
+        // URL Corregida con la "q" mágica para conectar con historial
+        const SUPABASE_URL = 'https://nuxnnzrbfrufkjnpgrmp.supabase.co'; 
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im51eG5uenJiZnJ1ZmtqbnBncm1wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEyMzk2ODAsImV4cCI6MjA4NjgxNTY4MH0.5wf0J-i0t_pRbRxHchib-9bTVTUJ5L1ag2PIe43dzZ0';
+
+        window.onload = async () => {
+            if (typeof supabase === 'undefined') {
+                console.error("❌ Librería no cargada");
+                return;
+            }
+
+            const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+            console.log("✅ BUSCANDO CONQUISTAS EN EL HISTORIAL...");
+
+            // Buscamos en la tabla historial que usted creó
+            const { data, error } = await supabaseClient.from('historial').select('fecha');
+            
+            if (error) {
+                console.error("❌ Error al leer historial:", error.message);
+                return;
+            }
+
+            // Convertimos la fecha '2026-02-17' en el número 17
+            const diasGanados = data ? data.map(d => parseInt(d.fecha.split('-')[2])) : [];
+            console.log("🏆 Días recuperados:", diasGanados);
+            
+            generarCalendario(diasGanados);
+        };
+
+        function generarCalendario(diasGanados) {
+            const grid = document.getElementById('calendar-days');
+            grid.innerHTML = '';
+            for (let i = 1; i <= 28; i++) {
+                const dayDiv = document.createElement('div');
+                dayDiv.classList.add('day');
+                dayDiv.innerText = i;
+                // Si el día está en la base de datos, ¡brilla!
+                if (diasGanados.includes(i)) {
+                    dayDiv.classList.add('completed');
+                }
+                grid.appendChild(dayDiv);
+            }
+        }
+    </script>
+</body>
+</html>

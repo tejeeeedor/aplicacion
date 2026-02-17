@@ -3,36 +3,52 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Habit Master - Dashboard</title>
+    <title>Habit Master RPG - Señor Raúl</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        :root { --bg: #0f172a; --card: #1e293b; --accent: #10b981; --text: #f8fafc; --gray: #94a3b8; }
+        :root { --bg: #0f172a; --card: #1e293b; --accent: #10b981; --text: #f8fafc; --gold: #fbbf24; }
         body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
         .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; width: 100%; max-width: 900px; }
-        .card { background: var(--card); padding: 20px; border-radius: 16px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); }
+        .card { background: var(--card); padding: 20px; border-radius: 16px; box-shadow: 0 10px 15px rgba(0,0,0,0.2); }
         .full-width { grid-column: 1 / -1; }
-        h2 { margin-top: 0; font-size: 1.2rem; color: var(--accent); }
+        h2 { margin-top: 0; color: var(--accent); }
         .habit-row { display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #334155; }
-        button { background: var(--accent); border: none; color: white; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.3s; }
-        button:hover { opacity: 0.8; transform: scale(1.05); }
-        .recommendation-box { border-left: 5px solid var(--accent); background: #134e4a; padding: 15px; border-radius: 8px; margin-bottom: 20px; width: 100%; max-width: 860px; }
+        button { border: none; color: white; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.3s; }
+        .btn-nav { background: #8b5cf6; text-decoration: none; padding: 12px 20px; border-radius: 10px; margin-bottom: 20px; display: inline-block; color: white; }
         input { background: #334155; border: none; padding: 10px; border-radius: 8px; color: white; width: 60%; }
+        
+        /* Estilos de la Tienda y XP */
+        .xp-container { width: 100%; height: 12px; background: #334155; border-radius: 6px; margin-top: 10px; overflow: hidden; }
+        #xp-bar { height: 100%; background: var(--gold); width: 0%; transition: width 0.5s ease; shadow: 0 0 10px var(--gold); }
+        .shop-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px; }
+        .shop-item { background: #334155; padding: 15px; border-radius: 12px; text-align: center; border: 1px solid transparent; transition: 0.3s; }
+        .shop-item:hover { border-color: var(--gold); }
 
-        /* Animación del Cartel */
-        @keyframes modalPop {
-            from { transform: scale(0.8); opacity: 0; }
-            to { transform: scale(1); opacity: 1; }
-        }
+        #delete-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 1000; align-items: center; justify-content: center; backdrop-filter: blur(5px); }
+        .modal-content { background: #1e293b; padding: 30px; border-radius: 20px; border: 2px solid #ef4444; text-align: center; animation: modalPop 0.3s forwards; }
+        @keyframes modalPop { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
     </style>
 </head>
 <body>
 
-    <div class="recommendation-box">
-        <strong>💡 Recomendación del Sistema:</strong>
-        <p id="ai-rec">Analizando tus patrones... ¡Sigue así, vas por buen camino!</p>
-    </div>
+    <a href="calendario.html" class="btn-nav">📅 Ver mi Calendario de Conquistas</a>
 
     <div class="grid">
+        <div class="card full-width" style="border: 2px solid var(--gold);">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h2 style="color: var(--gold); margin: 0;">NIVEL <span id="level-val">1</span></h2>
+                    <p style="margin: 5px 0 0 0; font-size: 0.9rem; opacity: 0.8;">Señor Raúl, Dios de la Destrucción</p>
+                </div>
+                <div style="text-align: right;">
+                    <h2 style="margin: 0; color: var(--gold);"><span id="coin-val">0</span> 💰</h2>
+                </div>
+            </div>
+            <div class="xp-container">
+                <div id="xp-bar"></div>
+            </div>
+        </div>
+
         <div class="card">
             <h2>Progreso Diario</h2>
             <canvas id="progressChart"></canvas>
@@ -43,51 +59,89 @@
             <div id="habit-list"></div>
             <div style="margin-top: 15px; display: flex; gap: 10px;">
                 <input type="text" id="habit-input" placeholder="Nuevo hábito...">
-                <button onclick="addHabit()">+</button>
+                <button onclick="addHabit()" style="background: var(--accent);">+</button>
             </div>
         </div>
 
         <div class="card full-width">
-            <h2>Actividad de la Semana</h2>
-            <canvas id="weeklyChart" height="80"></canvas>
-        </div>
-    </div>
-
-    <div id="delete-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 1000; align-items: center; justify-content: center; backdrop-filter: blur(5px);">
-        <div style="background: #1e293b; padding: 30px; border-radius: 20px; border: 2px solid #ef4444; max-width: 400px; text-align: center; box-shadow: 0 0 20px rgba(239, 68, 68, 0.4); animation: modalPop 0.3s forwards;">
-            <h2 style="color: #ef4444; margin-top: 0;">⚠️ ALERTA DE DESTRUCCIÓN</h2>
-            <p id="modal-text" style="font-size: 1.1rem; line-height: 1.5;">¿Seguro que desea aniquilar este hábito, Señor Raúl?</p>
-            <div style="display: flex; gap: 10px; justify-content: center; margin-top: 25px;">
-                <button onclick="closeModal()" style="background: #475569;">PERDONAR</button>
-                <button id="confirm-delete-btn" style="background: #ef4444;">ANIQUILAR</button>
+            <h2>💎 TIENDA DE PODER</h2>
+            <div class="shop-grid">
+                <div class="shop-item">
+                    <p style="margin: 0 0 10px 0;">🎁 Recompensa Real</p>
+                    <button onclick="comprar('Recompensa', 50)" style="background: var(--gold); color: #000; width: 100%;">50 💰</button>
+                </div>
+                
+                <div class="shop-item">
+                    <p style="margin: 0 0 10px 0;">🧪 Poción de Racha</p>
+                    <button onclick="comprar('Pocion', 100)" style="background: #3b82f6; width: 100%;">100 💰</button>
+                </div>
+        
+                <div class="shop-item">
+                    <p style="margin: 0 0 10px 0;">🛡️ Escudo de Racha</p>
+                    <button onclick="comprar('escudo', 150)" style="background: #3b82f6; width: 100%;">150 💰</button>
+                    <p style="font-size: 0.8rem; margin-top: 5px;">Reservas: <span id="escudos-val">0</span></p>
+                </div>
             </div>
         </div>
+
+        <div class="card full-width">
+            <h2>Actividad Semanal (Rachas 🔥)</h2>
+            <canvas id="weeklyChart" height="80"></canvas>
+        </div>
+
+        <div class="card full-width">
+            <p id="ai-rec" style="font-weight: bold; text-align: center; margin: 0;">Analizando tus patrones...</p>
+        </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
+
     <script>
-        // URL con la "q" corregida para evitar el error ERR_NAME_NOT_RESOLVED
-        const SUPABASE_URL = 'https://nuxnnzrbfrufkjnpqprmp.supabase.co';
+        // 1. URL BLINDADA (Con la "q")
+        const SUPABASE_URL = 'https://nuxnnzrbfrufkjnpgrmp.supabase.co'; 
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im51eG5uenJiZnJ1ZmtqbnBncm1wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEyMzk2ODAsImV4cCI6MjA4NjgxNTY4MH0.5wf0J-i0t_pRbRxHchib-9bTVTUJ5L1ag2PIe43dzZ0'; 
     
         let habits = [];
         let progressChart, weeklyChart;
+        let supabaseClient;
+        let miPerfil = { xp: 0, nivel: 1, monedas: 0, id: 1 };
     
-        function initCharts() {
+        window.onload = async () => {
+            supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+            console.log("✅ IMPERIO CONECTADO, SEÑOR RAÚL");
+            
+            // Cargar todo en orden
+            await loadData(); // Esta es la función que faltaba
+            await cargarPerfil(); 
+    
+            // Inicializar Gráficas (Asegúrese de tener los canvas en el HTML)
             const ctx1 = document.getElementById('progressChart').getContext('2d');
-            progressChart = new Chart(ctx1, {
-                type: 'doughnut',
-                data: { labels: ['Completado', 'Pendiente'], datasets: [{ data: [0, 100], backgroundColor: ['#10b981', '#334155'], borderWidth: 0 }] },
-                options: { cutout: '80%' }
-            });
-    
+            progressChart = new Chart(ctx1, { type: 'doughnut', data: { labels: ['Hecho', 'Pendiente'], datasets: [{ data: [0, 100], backgroundColor: ['#10b981', '#334155'], borderWidth: 0 }] }, options: { cutout: '85%', plugins: { legend: { display: false } } } });
+            
             const ctx2 = document.getElementById('weeklyChart').getContext('2d');
-            weeklyChart = new Chart(ctx2, {
-                type: 'bar',
-                data: { 
-                    labels: ['Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab', 'Dom'], 
-                    datasets: [{ label: 'Racha Actual', data: [0, 0, 0, 0, 0, 0, 0], backgroundColor: '#38bdf8' }] 
-                }
-            });
+            weeklyChart = new Chart(ctx2, { type: 'bar', data: { labels: [], datasets: [{ label: 'Racha', data: [], backgroundColor: [], borderRadius: 8 }] }, options: { scales: { y: { beginAtZero: true } } } });
+            
+            render();
+        };
+    
+        // FUNCIÓN PARA CARGAR HÁBITOS
+        async function loadData() {
+            const { data, error } = await supabaseClient.from('habitos').select('*').order('nombre');
+            if (!error && data) {
+                habits = data.map(h => ({ name: h.nombre, completed: h.completado_hoy, streak: h.racha }));
+            } else {
+                console.error("❌ Error cargando hábitos:", error?.message);
+            }
+        }
+    
+        async function cargarPerfil() {
+            const { data } = await supabaseClient.from('perfil').select('*').eq('id', 1);
+            if (data && data.length > 0) {
+                miPerfil = data[0];
+                console.log("💎 PERFIL CARGADO: Nivel " + miPerfil.nivel);
+                actualizarInterfazTienda();
+            }
         }
     
         function render() {
@@ -99,96 +153,83 @@
                 if(h.completed) completedCount++;
                 list.innerHTML += `
                     <div class="habit-row">
-                        <span>${h.name} <b>(🔥 ${h.streak})</b></span>
-                        <div style="display: flex; gap: 5px;">
-                            <button onclick="handleToggle(${i})" style="background: ${h.completed ? '#334155' : '#10b981'}">
-                                ${h.completed ? 'Deshacer' : 'Logrado'}
-                            </button>
-                            <button onclick="deleteHabit(${i})" style="background: #ef4444; padding: 8px 10px;">🗑️</button>
-                        </div>
-                    </div>
-                `;
+                        <span>${h.name} <b style="color: #fbbf24">🔥 ${h.streak}</b></span>
+                        <button onclick="handleToggle(${i})" style="background: ${h.completed ? '#334155' : '#10b981'}">
+                            ${h.completed ? 'Deshacer' : 'Logrado'}
+                        </button>
+                    </div>`;
             });
     
-            const percent = (completedCount / habits.length) * 100 || 0;
-            if(progressChart) {
-                progressChart.data.datasets[0].data = [percent, 100 - percent];
-                progressChart.update();
-            }
-            updateAI(percent);
+            const percent = Math.round((completedCount / habits.length) * 100) || 0;
+            progressChart.data.datasets[0].data = [percent, 100 - percent];
+            progressChart.update();
+            renderCharts(); // Actualiza las barras
         }
     
-        const scriptSupabase = document.createElement('script');
-        scriptSupabase.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js';
-        document.head.append(scriptSupabase);
-    
-        let supabaseClient;
-        scriptSupabase.onload = async () => {
-            supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-            console.log("✅ CONECTADO A SUPABASE, SEÑOR RAÚL");
-            loadFromCloud();
-        };
-
-        async function loadFromCloud() {
-            if (supabaseClient) {
-                const { data, error } = await supabaseClient.from('habitos').select('*').order('nombre');
-                if (!error && data) {
-                    habits = data.map(h => ({ name: h.nombre, completed: h.completado_hoy, streak: h.racha }));
-                    console.log("🚀 DATOS SINCRONIZADOS");
-                    render();
-                }
-            }
+        function renderCharts() {
+            weeklyChart.data.labels = habits.map(h => h.name);
+            weeklyChart.data.datasets[0].data = habits.map(h => h.streak);
+            weeklyChart.data.datasets[0].backgroundColor = habits.map(() => '#fbbf24');
+            weeklyChart.update();
         }
     
         async function handleToggle(index) {
-            habits[index].completed = !habits[index].completed;
-            habits[index].streak += habits[index].completed ? 1 : -1;
+            const lograndolo = !habits[index].completed;
+            habits[index].completed = lograndolo;
+            habits[index].streak += lograndolo ? 1 : -1;
+            if(habits[index].streak < 0) habits[index].streak = 0;
+            
             render();
-            if (supabaseClient) {
-                await supabaseClient.from('habitos').upsert({ 
-                    nombre: habits[index].name, racha: habits[index].streak, completado_hoy: habits[index].completed 
-                });
-            }
+            if (lograndolo) ganarRecompensa();
+    
+            await supabaseClient.from('habitos').update({ completado_hoy: habits[index].completed, racha: habits[index].streak }).eq('nombre', habits[index].name);
         }
     
-        let indexParaBorrar = null;
-        function deleteHabit(index) {
-            indexParaBorrar = index;
-            document.getElementById('modal-text').innerHTML = `Señor Raúl, ¿está seguro de que desea aniquilar <b>'${habits[index].name}'</b>?`;
-            document.getElementById('delete-modal').style.display = 'flex';
+        async function ganarRecompensa() {
+            miPerfil.xp += 20;
+            miPerfil.monedas += 10;
+            if (miPerfil.xp >= 100) { miPerfil.xp = 0; miPerfil.nivel++; confetti({ particleCount: 150, spread: 60, colors: ['#fbbf24'] }); }
+            await supabaseClient.from('perfil').update({ xp: miPerfil.xp, nivel: miPerfil.nivel, monedas: miPerfil.monedas }).eq('id', 1);
+            actualizarInterfazTienda();
+        }
+    
+        function actualizarInterfazTienda() {
+    document.getElementById('level-val').innerText = miPerfil.nivel;
+    document.getElementById('coin-val').innerText = miPerfil.monedas;
+    document.getElementById('xp-bar').style.width = miPerfil.xp + "%";
+    // Esta línea es la que hace que el número de escudos se vea
+    document.getElementById('escudos-val').innerText = miPerfil.escudos || 0;
+}
+
+        async function comprar(tipo, precio) {
+    if (miPerfil.monedas >= precio) {
+        miPerfil.monedas -= precio;
+        
+        // Si compra un escudo, aumenta el contador en su objeto de perfil
+        if (tipo === 'escudo') {
+            miPerfil.escudos = (miPerfil.escudos || 0) + 1;
         }
 
-        document.getElementById('confirm-delete-btn').onclick = async () => {
-            const nombreBorrar = habits[indexParaBorrar].name;
-            habits.splice(indexParaBorrar, 1);
-            render();
-            closeModal();
-            if (supabaseClient) {
-                await supabaseClient.from('habitos').delete().eq('nombre', nombreBorrar);
-                console.log("💥 Aniquilado.");
-            }
-        };
+        // Guardamos los cambios en Supabase usando su ID 1
+        const { error } = await supabaseClient
+            .from('perfil')
+            .update({ 
+                monedas: miPerfil.monedas, 
+                escudos: miPerfil.escudos 
+            })
+            .eq('id', 1);
 
-        function closeModal() { document.getElementById('delete-modal').style.display = 'none'; }
-    
-        async function addHabit() {
-            const val = document.getElementById('habit-input').value;
-            if(val) {
-                habits.push({ name: val, completed: false, streak: 0 });
-                document.getElementById('habit-input').value = '';
-                render();
-                if (supabaseClient) {
-                    await supabaseClient.from('habitos').insert({ nombre: val, racha: 0, completado_hoy: false });
-                }
-            }
+        if (!error) {
+            actualizarInterfazTienda();
+            alert("¡Poder adquirido: " + tipo.toUpperCase() + "!");
+        } else {
+            console.error("Error en la compra:", error.message);
         }
-    
-        function updateAI(percent) {
-            const rec = document.getElementById('ai-rec');
-            rec.innerText = percent === 100 ? "¡Día perfecto, Señor Raúl!" : "Analizando patrones...";
-        }
-    
-        window.onload = () => { initCharts(); };
+    } else {
+        alert("No tienes suficientes monedas, Señor Raúl.");
+    }
+}
     </script>
+    <audio id="victory-sound" src="https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3"></audio>
 </body>
 </html>
