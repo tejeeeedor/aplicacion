@@ -98,54 +98,80 @@
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
 
     <script>
-        // 1. URL BLINDADA (Con la "q")
+        // 1. URL TOTALMENTE CORREGIDA (Con la "q")
         const SUPABASE_URL = 'https://nuxnnzrbfrufkjnpgrmp.supabase.co'; 
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im51eG5uenJiZnJ1ZmtqbnBncm1wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEyMzk2ODAsImV4cCI6MjA4NjgxNTY4MH0.5wf0J-i0t_pRbRxHchib-9bTVTUJ5L1ag2PIe43dzZ0'; 
     
         let habits = [];
         let progressChart, weeklyChart;
         let supabaseClient;
-        let miPerfil = { xp: 0, nivel: 1, monedas: 0, id: 1 };
+        let miPerfil = { xp: 0, nivel: 1, monedas: 0, id: 1, escudos: 0 };
     
         window.onload = async () => {
             supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-            console.log("✅ IMPERIO CONECTADO, SEÑOR RAÚL");
-            
-            // Cargar todo en orden
-            await loadData(); // Esta es la función que faltaba
-            await cargarPerfil(); 
+            console.log("⚔️ SISTEMA INICIADO, SEÑOR RAÚL");
     
-            // Inicializar Gráficas (Asegúrese de tener los canvas en el HTML)
-            const ctx1 = document.getElementById('progressChart').getContext('2d');
-            progressChart = new Chart(ctx1, { type: 'doughnut', data: { labels: ['Hecho', 'Pendiente'], datasets: [{ data: [0, 100], backgroundColor: ['#10b981', '#334155'], borderWidth: 0 }] }, options: { cutout: '85%', plugins: { legend: { display: false } } } });
+            // Inicializar gráficas primero
+            initCharts();
             
-            const ctx2 = document.getElementById('weeklyChart').getContext('2d');
-            weeklyChart = new Chart(ctx2, { type: 'bar', data: { labels: [], datasets: [{ label: 'Racha', data: [], backgroundColor: [], borderRadius: 8 }] }, options: { scales: { y: { beginAtZero: true } } } });
-            
+            // Cargar datos
+            await loadData();
+            await cargarPerfil(); 
             render();
         };
     
-        // FUNCIÓN PARA CARGAR HÁBITOS
         async function loadData() {
             const { data, error } = await supabaseClient.from('habitos').select('*').order('nombre');
             if (!error && data) {
-                habits = data.map(h => ({ name: h.nombre, completed: h.completado_hoy, streak: h.racha }));
+                const hoy = new Date().toLocaleDateString('en-CA');
+                habits = data.map(h => ({
+                    name: h.nombre,
+                    // Comprobamos la fecha para el reseteo diario
+                    completed: h.ultima_fecha === hoy ? h.completado_hoy : false,
+                    streak: h.racha || 0
+                }));
+                render();
             } else {
-                console.error("❌ Error cargando hábitos:", error?.message);
+                console.error("❌ Error de carga:", error?.message);
             }
         }
     
         async function cargarPerfil() {
-            const { data } = await supabaseClient.from('perfil').select('*').eq('id', 1);
-            if (data && data.length > 0) {
+            const { data, error } = await supabaseClient.from('perfil').select('*').eq('id', 1);
+            if (!error && data && data.length > 0) {
                 miPerfil = data[0];
-                console.log("💎 PERFIL CARGADO: Nivel " + miPerfil.nivel);
                 actualizarInterfazTienda();
             }
         }
     
+        async function handleToggle(index) {
+            const habit = habits[index];
+            const lograndolo = !habit.completed;
+            const hoy = new Date().toLocaleDateString('en-CA');
+    
+            // Actualización local
+            habit.completed = lograndolo;
+            habit.streak += lograndolo ? 1 : -1;
+            if(habit.streak < 0) habit.streak = 0;
+            
+            render();
+            if (lograndolo) ganarRecompensa();
+    
+            // GUARDADO EN BASE DE DATOS
+            const { error } = await supabaseClient.from('habitos')
+                .update({ 
+                    completado_hoy: habit.completed, 
+                    racha: habit.streak,
+                    ultima_fecha: hoy 
+                })
+                .eq('nombre', habit.name); // Asegúrese de que el nombre coincida
+    
+            if (error) console.error("❌ Error al guardar racha:", error.message);
+        }
+    
         function render() {
             const list = document.getElementById('habit-list');
+            if (!list) return;
             list.innerHTML = '';
             let completedCount = 0;
     
@@ -161,74 +187,68 @@
             });
     
             const percent = Math.round((completedCount / habits.length) * 100) || 0;
-            progressChart.data.datasets[0].data = [percent, 100 - percent];
-            progressChart.update();
-            renderCharts(); // Actualiza las barras
+            updateCharts(percent);
         }
     
-        function renderCharts() {
-            weeklyChart.data.labels = habits.map(h => h.name);
-            weeklyChart.data.datasets[0].data = habits.map(h => h.streak);
-            weeklyChart.data.datasets[0].backgroundColor = habits.map(() => '#fbbf24');
-            weeklyChart.update();
-        }
-    
-        async function handleToggle(index) {
-            const lograndolo = !habits[index].completed;
-            habits[index].completed = lograndolo;
-            habits[index].streak += lograndolo ? 1 : -1;
-            if(habits[index].streak < 0) habits[index].streak = 0;
+        function initCharts() {
+            const ctx1 = document.getElementById('progressChart').getContext('2d');
+            progressChart = new Chart(ctx1, { type: 'doughnut', data: { datasets: [{ data: [0, 100], backgroundColor: ['#10b981', '#334155'], borderWidth: 0 }] }, options: { cutout: '85%', plugins: { legend: { display: false } } } });
             
-            render();
-            if (lograndolo) ganarRecompensa();
+            const ctx2 = document.getElementById('weeklyChart').getContext('2d');
+            weeklyChart = new Chart(ctx2, { type: 'bar', data: { labels: [], datasets: [{ label: 'Poder de Racha', data: [], backgroundColor: '#fbbf24', borderRadius: 8 }] }, options: { scales: { y: { beginAtZero: true } } } });
+        }
     
-            await supabaseClient.from('habitos').update({ completado_hoy: habits[index].completed, racha: habits[index].streak }).eq('nombre', habits[index].name);
+        function updateCharts(percent) {
+            if (progressChart) {
+                progressChart.data.datasets[0].data = [percent, 100 - percent];
+                progressChart.update();
+            }
+            if (weeklyChart) {
+                weeklyChart.data.labels = habits.map(h => h.name);
+                weeklyChart.data.datasets[0].data = habits.map(h => h.streak);
+                weeklyChart.update();
+            }
         }
     
         async function ganarRecompensa() {
             miPerfil.xp += 20;
             miPerfil.monedas += 10;
-            if (miPerfil.xp >= 100) { miPerfil.xp = 0; miPerfil.nivel++; confetti({ particleCount: 150, spread: 60, colors: ['#fbbf24'] }); }
-            await supabaseClient.from('perfil').update({ xp: miPerfil.xp, nivel: miPerfil.nivel, monedas: miPerfil.monedas }).eq('id', 1);
+            if (miPerfil.xp >= 100) { 
+                miPerfil.xp = 0; 
+                miPerfil.nivel++; 
+                confetti({ particleCount: 150, spread: 60, colors: ['#fbbf24'] }); 
+            }
+            await supabaseClient.from('perfil').update({ 
+                xp: miPerfil.xp, 
+                nivel: miPerfil.nivel, 
+                monedas: miPerfil.monedas 
+            }).eq('id', 1);
             actualizarInterfazTienda();
         }
     
         function actualizarInterfazTienda() {
-    document.getElementById('level-val').innerText = miPerfil.nivel;
-    document.getElementById('coin-val').innerText = miPerfil.monedas;
-    document.getElementById('xp-bar').style.width = miPerfil.xp + "%";
-    // Esta línea es la que hace que el número de escudos se vea
-    document.getElementById('escudos-val').innerText = miPerfil.escudos || 0;
-}
-
+            document.getElementById('level-val').innerText = miPerfil.nivel;
+            document.getElementById('coin-val').innerText = miPerfil.monedas;
+            document.getElementById('xp-bar').style.width = miPerfil.xp + "%";
+            document.getElementById('escudos-val').innerText = miPerfil.escudos || 0;
+        }
+    
         async function comprar(tipo, precio) {
-    if (miPerfil.monedas >= precio) {
-        miPerfil.monedas -= precio;
-        
-        // Si compra un escudo, aumenta el contador en su objeto de perfil
-        if (tipo === 'escudo') {
-            miPerfil.escudos = (miPerfil.escudos || 0) + 1;
+            if (miPerfil.monedas >= precio) {
+                miPerfil.monedas -= precio;
+                if (tipo === 'escudo') miPerfil.escudos = (miPerfil.escudos || 0) + 1;
+                
+                await supabaseClient.from('perfil').update({ 
+                    monedas: miPerfil.monedas, 
+                    escudos: miPerfil.escudos 
+                }).eq('id', 1);
+                
+                actualizarInterfazTienda();
+                alert("¡Poder adquirido, Señor Raúl!");
+            } else {
+                alert("Monedas insuficientes.");
+            }
         }
-
-        // Guardamos los cambios en Supabase usando su ID 1
-        const { error } = await supabaseClient
-            .from('perfil')
-            .update({ 
-                monedas: miPerfil.monedas, 
-                escudos: miPerfil.escudos 
-            })
-            .eq('id', 1);
-
-        if (!error) {
-            actualizarInterfazTienda();
-            alert("¡Poder adquirido: " + tipo.toUpperCase() + "!");
-        } else {
-            console.error("Error en la compra:", error.message);
-        }
-    } else {
-        alert("No tienes suficientes monedas, Señor Raúl.");
-    }
-}
     </script>
     <audio id="victory-sound" src="https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3"></audio>
 </body>
